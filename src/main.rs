@@ -5,7 +5,7 @@ use std::time::{Duration, Instant};
 use once_cell::sync::Lazy;
 use sfml::{
     graphics::{Color, RenderTarget},
-    system::Vector2,
+    system::{Vector2, Vector2f},
     window::{Event, Key, VideoMode},
 };
 
@@ -17,7 +17,8 @@ static SCREEN_HEIGHT: Lazy<u32> = Lazy::new(|| VideoMode::desktop_mode().height)
 fn main() {
     let mut playing: bool = false;
 
-    let speed: f32 = 10.0;
+    let max_player_speed: f32 = 15.0;
+    let max_ball_speed: f32 = 20.0;
 
     let mut up_pressed: bool = false;
     let mut down_pressed: bool = false;
@@ -85,7 +86,7 @@ fn main() {
                     Key::Space => {
                         if !playing {
                             println!("Starting the game!");
-                            ball.velocity.x = 20.0;
+                            ball.velocity.x = max_ball_speed;
                             playing = true;
                         }
                     }
@@ -117,7 +118,7 @@ fn main() {
 
         // Player Logic
 
-        player.velocity.y = input as f32 * speed;
+        player.velocity.y = input as f32 * max_player_speed;
 
         Entity::r#move(&mut player);
 
@@ -132,6 +133,21 @@ fn main() {
         player.window.display();
 
         // AI Logic
+
+        if ball.velocity.x > 0.0 {
+            let ball_overlap = Entity::get_overlap(&ai, &ball);
+            if ball_overlap.y <= 0 {
+                if ball.position.y < ai.position.y {
+                    ai.velocity.y = -1.0 * max_player_speed;
+                } else {
+                    ai.velocity.y = max_player_speed;
+                }
+            } else {
+                ai.velocity.y = 0.0;
+            }
+        }
+
+        ai.r#move();
 
         ai.window.clear(Color::WHITE);
         ai.window.display();
@@ -188,6 +204,7 @@ fn main() {
                     }
 
                     ball.velocity += player.velocity;
+                    ball.velocity = normalize_vector(ball.velocity) * max_ball_speed;
                 }
             }
 
@@ -209,6 +226,9 @@ fn main() {
                 ball.velocity.x = 0.0;
                 ball.velocity.y = 0.0;
                 ball.set_position(Some(ball_center_pos.x), Some(ball_center_pos.y));
+
+                ai.velocity.y = 0.0;
+                ai.set_position(None, Some((*SCREEN_HEIGHT / 2) as f32 - 24.0));
             }
         }
 
@@ -227,5 +247,14 @@ fn main() {
 
         // Update the time of the last update
         last_update = Instant::now();
+    }
+}
+
+fn normalize_vector(vector: Vector2f) -> Vector2f {
+    let length = (vector.x.powi(2) + vector.y.powi(2)).sqrt();
+    if length != 0.0 {
+        Vector2f::new(vector.x / length, vector.y / length)
+    } else {
+        vector
     }
 }
