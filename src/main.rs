@@ -17,61 +17,79 @@ static SCREEN_HEIGHT: Lazy<u32> = Lazy::new(|| VideoMode::desktop_mode().height)
 fn main() {
     let mut playing: bool = false;
 
-    let max_player_speed: f32 = 15.0;
-    let max_ball_speed: f32 = 20.0;
+    const MAX_PLAYER_SPEED: f32 = 15.0;
+    let mut max_ball_speed: f32 = 15.0;
+    const INIT_BALL_SPEED: f32 = 20.0;
 
     let mut up_pressed: bool = false;
     let mut down_pressed: bool = false;
 
-    const PLAYER_WINDOW_WIDTH: u32 = 100;
+    const PLAYER_WINDOW_WIDTH: u32 = 75;
     const PLAYER_WINDOW_HEIGHT: u32 = 300;
 
     const BALL_SIDE: u32 = 100;
 
-    let ball_center_pos: Vector2<f32> = Vector2::new(
-        (*SCREEN_WIDTH / 2 - BALL_SIDE / 2) as f32,
-        (*SCREEN_HEIGHT / 2 - BALL_SIDE / 2) as f32,
-    );
+    let ball_center_pos: Vector2<f32> =
+        Vector2::new((*SCREEN_WIDTH / 2) as f32, (*SCREEN_HEIGHT / 2) as f32);
 
     let mut input: i8;
 
     let mut shoot_timer: u8 = 0;
-    const SHOOT_TIMER_MAX: u8 = 10;
+    const MAX_SHOOT_TIMER: u8 = 10;
     let mut shoot_buffer: u8 = 0;
-    const SHOOT_BUFFER_MAX: u8 = 10;
+    const MAX_SHOOT_BUFFER: u8 = 10;
 
     // Player setup
 
     let mut player: Entity = Entity::new(
         Vector2::new(
-            (PLAYER_WINDOW_WIDTH + (PLAYER_WINDOW_WIDTH / 2)) as f32,
-            (*SCREEN_HEIGHT / 2) as f32 - 24.0,
+            (PLAYER_WINDOW_WIDTH + (PLAYER_WINDOW_WIDTH * 1)) as f32,
+            (*SCREEN_HEIGHT / 2) as f32,
         ),
         PLAYER_WINDOW_WIDTH,
         PLAYER_WINDOW_HEIGHT,
         String::from("Player"),
+        Color::BLUE,
     );
 
     // AI setup
 
     let mut ai: Entity = Entity::new(
         Vector2::new(
-            (*SCREEN_WIDTH - PLAYER_WINDOW_WIDTH - (PLAYER_WINDOW_WIDTH / 2)) as f32,
-            (*SCREEN_HEIGHT / 2) as f32 - 24.0,
+            (*SCREEN_WIDTH - PLAYER_WINDOW_WIDTH - (PLAYER_WINDOW_WIDTH * 1)) as f32,
+            (*SCREEN_HEIGHT / 2) as f32,
         ),
         PLAYER_WINDOW_WIDTH,
         PLAYER_WINDOW_HEIGHT,
         String::from("AI"),
+        Color::RED,
     );
 
     // Ball setup
 
-    let mut ball: Entity = Entity::new(ball_center_pos, BALL_SIDE, BALL_SIDE, String::from("Ball"));
+    let mut ball: Entity = Entity::new(
+        ball_center_pos,
+        BALL_SIDE,
+        BALL_SIDE,
+        String::from("Ball"),
+        Color::WHITE,
+    );
+
+    // Score window setup
+
+    let mut score_window = Entity::new(
+        Vector2::new((*SCREEN_WIDTH / 2) as f32, 150.0),
+        250,
+        100,
+        String::from("Score"),
+        Color::WHITE,
+    );
 
     // Game loop
 
     let mut last_update = Instant::now();
     let frame_duration = Duration::from_secs_f64(1.0 / 60.0); // 1/60th of a second
+    let mut delay_multiplier: u32 = 1;
 
     while player.window.is_open() {
         // Event handling
@@ -91,15 +109,16 @@ fn main() {
                     Key::Space => {
                         if !playing {
                             println!("Starting the game!");
-                            ball.velocity.x = max_ball_speed;
+                            ball.velocity.x = INIT_BALL_SPEED;
                             playing = true;
                         } else {
                             if shoot_timer > 0 {
                                 shoot_timer = 0;
                                 ball.velocity.x = max_ball_speed * ball.velocity.x.signum();
                                 ball.velocity.y = 0.0;
+                                ball.color = Color::YELLOW;
                             } else {
-                                shoot_buffer = SHOOT_BUFFER_MAX;
+                                shoot_buffer = MAX_SHOOT_BUFFER;
                             }
                         }
                     }
@@ -137,7 +156,7 @@ fn main() {
             player.acceleration.y = -1.0 * velocity_sign;
             player.velocity.y += player.acceleration.y;
             player.velocity.y =
-                player.velocity.y.abs().clamp(0.0, max_player_speed) * velocity_sign;
+                player.velocity.y.abs().clamp(0.0, MAX_PLAYER_SPEED) * velocity_sign;
             if player.velocity.y.abs() < 2.5 {
                 player.velocity.y = 0.0;
             }
@@ -162,14 +181,14 @@ fn main() {
             player.set_position(None, Some(clamped_player_pos_y));
         }
 
-        player.window.clear(Color::WHITE);
+        player.window.clear(player.color);
         player.window.display();
 
         // AI Logic
 
         if ball.velocity.x > 0.0 {
             let ball_overlap = Entity::get_overlap(&ai, &ball);
-            if ball_overlap.y <= 0 {
+            if ball_overlap.y <= ball.size.y as i32 {
                 if ball.position.y < ai.position.y {
                     ai.acceleration.y = -1.0 * 1.0;
                 } else {
@@ -180,7 +199,7 @@ fn main() {
                 let velocity_sign = ai.velocity.y.signum();
                 ai.acceleration.y = -1.0 * velocity_sign;
                 ai.velocity.y += ai.acceleration.y;
-                ai.velocity.y = ai.velocity.y.abs().clamp(0.0, max_player_speed) * velocity_sign;
+                ai.velocity.y = ai.velocity.y.abs().clamp(0.0, MAX_PLAYER_SPEED) * velocity_sign;
                 if ai.velocity.y.abs() < 2.5 {
                     ai.velocity.y = 0.0;
                 }
@@ -202,7 +221,7 @@ fn main() {
 
         ai.r#move();
 
-        ai.window.clear(Color::WHITE);
+        ai.window.clear(ai.color);
         ai.window.display();
 
         // Ball Logic
@@ -210,22 +229,25 @@ fn main() {
         if playing {
             ball.r#move();
 
-            let players = [&player, &ai];
+            let other_entities = [&player, &ai, &score_window];
 
-            // Player collision
+            // Ball collision
 
-            for &player in &players {
-                let ball_player_overlap: Vector2<i32> = Entity::get_overlap(&ball, player);
+            for &entity in &other_entities {
+                let ball_player_overlap: Vector2<i32> = Entity::get_overlap(&ball, entity);
                 if ball_player_overlap.x > 0 && ball_player_overlap.y > 0 {
-                    println!("Ball collided with {0}!", player.name);
-                    let prev_overlap: Vector2<i32> = Entity::get_prev_overlap(&ball, player);
+                    println!("Ball collided with {0}!", entity.name);
+
+                    delay_multiplier = 3;
+
+                    let prev_overlap: Vector2<i32> = Entity::get_prev_overlap(&ball, entity);
                     let adjustment_sign: Vector2<f32> = Vector2::new(
-                        if player.position.x > ball.position.x {
+                        if entity.position.x > ball.position.x {
                             1.0
                         } else {
                             -1.0
                         },
-                        if player.position.y < ball.position.y {
+                        if entity.position.y < ball.position.y {
                             1.0
                         } else {
                             -1.0
@@ -233,13 +255,12 @@ fn main() {
                     );
                     if prev_overlap.y > 0 {
                         ball.velocity.x *= -1.0;
-
-                        let adjustment =
+                        let adjustment: f32 =
                             ball.position.x - (ball_player_overlap.x as f32 * adjustment_sign.x);
                         ball.set_position(Some(adjustment), None);
                     } else if prev_overlap.x > 0 {
                         ball.velocity.y *= -1.0;
-                        let adjustment =
+                        let adjustment: f32 =
                             ball.position.y + (ball_player_overlap.y as f32 * adjustment_sign.y);
                         ball.set_position(None, Some(adjustment));
                     } else {
@@ -256,15 +277,21 @@ fn main() {
                         }
                     }
 
-                    ball.velocity += player.velocity;
+                    ball.velocity += entity.velocity;
                     ball.velocity = normalize_vector(ball.velocity) * max_ball_speed;
 
-                    if shoot_buffer > 0 {
-                        shoot_buffer = 0;
-                        ball.velocity.x = max_ball_speed * ball.velocity.x.signum();
-                        ball.velocity.y = 0.0;
+                    if entity.name == "Player" {
+                        if shoot_buffer > 0 {
+                            shoot_buffer = 0;
+                            ball.velocity.x = max_ball_speed * ball.velocity.x.signum();
+                            ball.velocity.y = 0.0;
+                            ball.color = Color::YELLOW;
+                        } else {
+                            shoot_timer = MAX_SHOOT_TIMER;
+                            ball.color = Color::WHITE;
+                        }
                     } else {
-                        shoot_timer = SHOOT_TIMER_MAX;
+                        ball.color = Color::WHITE;
                     }
                 }
             }
@@ -281,42 +308,62 @@ fn main() {
                 ball.set_position(None, Some(clamped_ball_pos_y));
             }
 
-            if ball.position.x < 0.0 || ball.position.x + BALL_SIDE as f32 > *SCREEN_WIDTH as f32 {
+            if (ball.position.x - ball.half_size.x as f32) < 0.0
+                || ball.position.x + ball.half_size.x as f32 > *SCREEN_WIDTH as f32
+            {
                 println!("Point!");
                 playing = false;
                 ball.velocity.x = 0.0;
                 ball.velocity.y = 0.0;
                 ball.set_position(Some(ball_center_pos.x), Some(ball_center_pos.y));
+                max_ball_speed = INIT_BALL_SPEED;
+
+                player.set_scale(1.0);
+                player.set_position(None, Some((*SCREEN_HEIGHT / 2) as f32 - 24.0));
 
                 ai.velocity.y = 0.0;
                 ai.set_position(None, Some((*SCREEN_HEIGHT / 2) as f32 - 24.0));
+                ai.set_scale(1.0);
+
+                delay_multiplier = 60;
             }
         }
 
-        ball.window.clear(Color::WHITE);
+        ball.window.clear(ball.color);
         ball.window.display();
+
+        // Score window logic
+
+        score_window.window.clear(score_window.color);
+        score_window.window.display();
 
         // Focus on player window
         player.window.request_focus();
 
-        // Calculate how long to sleep
-        if let Some(sleep_duration) =
-            frame_duration.checked_sub(Instant::now().duration_since(last_update))
-        {
-            std::thread::sleep(sleep_duration);
-        }
-
-        // Update the time of the last update
-        last_update = Instant::now();
-
+        // Timers
         if shoot_buffer > 0 {
             shoot_buffer -= 1;
-            println!("Shoot buffer: {}", shoot_buffer);
         }
         if shoot_timer > 0 {
             shoot_timer -= 1;
-            println!("Shoot timer: {}", shoot_timer);
         }
+
+        if playing {
+            max_ball_speed += 0.005;
+            player.set_scale_xy(None, Some((player.scale.y - 0.0001).clamp(0.25, 1.0)));
+            ai.set_scale_xy(None, Some((player.scale.y - 0.0001).clamp(0.25, 1.0)));
+        }
+
+        // Wait for next frame
+        if let Some(sleep_duration) = (frame_duration * delay_multiplier)
+            .checked_sub(Instant::now().duration_since(last_update))
+        {
+            std::thread::sleep(sleep_duration);
+            if delay_multiplier > 1 {
+                delay_multiplier = 1;
+            }
+        }
+        last_update = Instant::now();
     }
 }
 
