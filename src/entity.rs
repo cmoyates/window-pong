@@ -7,6 +7,7 @@ use sfml::{
 pub struct Entity {
     pub window: RenderWindow,
     pub position: Vector2<f32>,
+    pub init_position: Vector2<f32>,
     prev_position: Vector2<f32>,
     pub velocity: Vector2<f32>,
     pub acceleration: Vector2<f32>,
@@ -44,6 +45,7 @@ impl Entity {
         Entity {
             window,
             position,
+            init_position: position,
             prev_position: position,
             velocity: Vector2::new(0.0, 0.0),
             acceleration: Vector2::new(0.0, 0.0),
@@ -85,6 +87,10 @@ impl Entity {
     }
 
     pub fn set_scale(&mut self, scale: f32) {
+        if self.scale.x == scale && self.scale.y == scale {
+            return;
+        }
+
         self.scale.x = scale;
         self.scale.y = scale;
 

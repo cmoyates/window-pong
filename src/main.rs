@@ -117,6 +117,8 @@ fn main() {
                                 ball.velocity.x = max_ball_speed * ball.velocity.x.signum();
                                 ball.velocity.y = 0.0;
                                 ball.color = Color::YELLOW;
+                                delay_multiplier = 5;
+                                player.color = Color::YELLOW;
                             } else {
                                 shoot_buffer = MAX_SHOOT_BUFFER;
                             }
@@ -181,9 +183,6 @@ fn main() {
             player.set_position(None, Some(clamped_player_pos_y));
         }
 
-        player.window.clear(player.color);
-        player.window.display();
-
         // AI Logic
 
         if ball.velocity.x > 0.0 {
@@ -221,24 +220,19 @@ fn main() {
 
         ai.r#move();
 
-        ai.window.clear(ai.color);
-        ai.window.display();
-
         // Ball Logic
 
         if playing {
             ball.r#move();
 
-            let other_entities = [&player, &ai, &score_window];
+            let other_entities = [&mut player, &mut ai, &mut score_window];
 
             // Ball collision
 
-            for &entity in &other_entities {
+            for entity in other_entities {
                 let ball_player_overlap: Vector2<i32> = Entity::get_overlap(&ball, entity);
                 if ball_player_overlap.x > 0 && ball_player_overlap.y > 0 {
                     println!("Ball collided with {0}!", entity.name);
-
-                    delay_multiplier = 3;
 
                     let prev_overlap: Vector2<i32> = Entity::get_prev_overlap(&ball, entity);
                     let adjustment_sign: Vector2<f32> = Vector2::new(
@@ -286,12 +280,24 @@ fn main() {
                             ball.velocity.x = max_ball_speed * ball.velocity.x.signum();
                             ball.velocity.y = 0.0;
                             ball.color = Color::YELLOW;
+
+                            delay_multiplier = 5;
                         } else {
                             shoot_timer = MAX_SHOOT_TIMER;
                             ball.color = Color::WHITE;
+
+                            delay_multiplier = 3;
                         }
                     } else {
+                        println!("AI shot the ball!");
                         ball.color = Color::WHITE;
+                        delay_multiplier = 3;
+                    }
+                    entity.color = ball.color;
+
+                    if entity.name == "Score" && entity.velocity.length_sq() == 0.0 {
+                        entity.acceleration = ball.velocity;
+                        entity.set_scale(1.1);
                     }
                 }
             }
@@ -317,6 +323,7 @@ fn main() {
                 ball.velocity.y = 0.0;
                 ball.set_position(Some(ball_center_pos.x), Some(ball_center_pos.y));
                 max_ball_speed = INIT_BALL_SPEED;
+                ball.color = Color::WHITE;
 
                 player.set_scale(1.0);
                 player.set_position(None, Some((*SCREEN_HEIGHT / 2) as f32 - 24.0));
@@ -325,17 +332,43 @@ fn main() {
                 ai.set_position(None, Some((*SCREEN_HEIGHT / 2) as f32 - 24.0));
                 ai.set_scale(1.0);
 
-                delay_multiplier = 60;
+                delay_multiplier = 30;
             }
         }
 
         ball.window.clear(ball.color);
         ball.window.display();
 
+        // Display player and AI with appropriate color
+
+        player.window.clear(player.color);
+        player.window.display();
+
+        ai.window.clear(ai.color);
+        ai.window.display();
+
         // Score window logic
+
+        if (score_window.velocity.x > 0.0) == (score_window.acceleration.x > 0.0) {
+            score_window.acceleration *= 0.5;
+        }
+        score_window.velocity += score_window.acceleration;
+        score_window.r#move();
+        if (score_window.init_position - score_window.position).length_sq() < 2.0
+            && score_window.velocity.length_sq() < 0.1
+        {
+            score_window.velocity.x = 0.0;
+            score_window.velocity.y = 0.0;
+            score_window.position = score_window.init_position;
+        }
+        score_window.acceleration = score_window.init_position - score_window.position;
 
         score_window.window.clear(score_window.color);
         score_window.window.display();
+
+        score_window.set_scale(1.0);
+
+        // score_window.set_scale(1.0);
 
         // Focus on player window
         player.window.request_focus();
@@ -361,6 +394,9 @@ fn main() {
             std::thread::sleep(sleep_duration);
             if delay_multiplier > 1 {
                 delay_multiplier = 1;
+                player.color = Color::BLUE;
+                ai.color = Color::RED;
+                score_window.color = Color::WHITE;
             }
         }
         last_update = Instant::now();
