@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
 use sfml::{
-    graphics::{Color, Font, RenderTarget, Text, Transformable},
+    graphics::{CircleShape, Color, Font, RenderTarget, Shape, Text, Transformable},
     system::{Vector2, Vector2f},
     window::{Event, Key, VideoMode},
 };
@@ -41,7 +41,7 @@ fn main() {
 
     let mut score: (u8, u8) = (0, 0);
 
-    const IMPACT_SCALE: f32 = 2.0;
+    const IMPACT_SCALE: f32 = 1.1;
 
     // Player setup
 
@@ -56,6 +56,15 @@ fn main() {
         Color::BLUE,
     );
 
+    let mut player_eye_circle = CircleShape::new(20.0, 30);
+    player_eye_circle.set_fill_color(Color::WHITE);
+    player_eye_circle.set_origin(Vector2::new(20.0, 20.0));
+    player_eye_circle.set_position(Vector2::new(player.half_size.x as f32, 35.0));
+
+    let mut player_eye_pupil = CircleShape::new(7.5, 30);
+    player_eye_pupil.set_fill_color(Color::BLACK);
+    player_eye_pupil.set_origin(Vector2::new(7.5, 7.5));
+
     // AI setup
 
     let mut ai: Entity = Entity::new(
@@ -69,6 +78,15 @@ fn main() {
         Color::RED,
     );
 
+    let mut ai_eye_circle = CircleShape::new(20.0, 30);
+    ai_eye_circle.set_fill_color(Color::WHITE);
+    ai_eye_circle.set_origin(Vector2::new(20.0, 20.0));
+    ai_eye_circle.set_position(Vector2::new(ai.half_size.x as f32, 35.0));
+
+    let mut ai_eye_pupil = CircleShape::new(7.5, 30);
+    ai_eye_pupil.set_fill_color(Color::BLACK);
+    ai_eye_pupil.set_origin(Vector2::new(7.5, 7.5));
+
     // Ball setup
 
     let mut ball: Entity = Entity::new(
@@ -81,7 +99,7 @@ fn main() {
 
     // Score window setup
 
-    let mut score_window = Entity::new(
+    let mut score_board = Entity::new(
         Vector2::new((*SCREEN_WIDTH / 2) as f32, 150.0),
         250,
         100,
@@ -96,8 +114,8 @@ fn main() {
     let text_rect = score_text.local_bounds();
     score_text.set_origin(Vector2::new(text_rect.width / 2.0, text_rect.height / 1.2));
     score_text.set_position(Vector2::new(
-        score_window.half_size.x as f32,
-        score_window.half_size.y as f32,
+        score_board.half_size.x as f32,
+        score_board.half_size.y as f32,
     ));
 
     // Game loop
@@ -134,6 +152,10 @@ fn main() {
                                 ball.color = Color::YELLOW;
                                 delay_multiplier = 5;
                                 player.color = Color::YELLOW;
+                                player.set_scale_xy(
+                                    Some(player.scale.x * IMPACT_SCALE),
+                                    Some(player.scale.y * IMPACT_SCALE),
+                                );
                             } else {
                                 shoot_buffer = MAX_SHOOT_BUFFER;
                             }
@@ -183,7 +205,7 @@ fn main() {
             player.velocity.y += player.acceleration.y;
         }
 
-        Entity::r#move(&mut player);
+        player.r#move();
 
         if player.position.y < 48.0 + player.half_size.y as f32
             || player.position.y > *SCREEN_HEIGHT as f32 - player.half_size.y as f32
@@ -240,7 +262,7 @@ fn main() {
         if playing {
             ball.r#move();
 
-            let other_entities = [&mut player, &mut ai, &mut score_window];
+            let other_entities = [&mut player, &mut ai, &mut score_board];
 
             // Ball collision
 
@@ -310,9 +332,13 @@ fn main() {
                     }
                     entity.color = ball.color;
 
+                    entity.set_scale_xy(
+                        Some(entity.scale.x * IMPACT_SCALE),
+                        Some(entity.scale.y * IMPACT_SCALE),
+                    );
+
                     if entity.name == "Score" && entity.velocity.length_sq() == 0.0 {
                         entity.acceleration = ball.velocity;
-                        entity.set_scale(IMPACT_SCALE);
                     }
                 }
             }
@@ -365,37 +391,57 @@ fn main() {
         ball.window.clear(ball.color);
         ball.window.display();
 
-        // Display player and AI with appropriate color
+        // Display player and AI
 
         player.window.clear(player.color);
+        player.window.draw(&mut player_eye_circle);
+
+        let player_look_ball_dir = normalize_vector(
+            ball.position
+                - (player.position + player_eye_circle.position()
+                    - Vector2::new(player.half_size.x as f32, player.half_size.y as f32)),
+        );
+        player_eye_pupil.set_position(player_eye_circle.position() + (player_look_ball_dir * 10.0));
+
+        player.window.draw(&mut player_eye_pupil);
         player.window.display();
 
         ai.window.clear(ai.color);
+        ai.window.draw(&mut ai_eye_circle);
+
+        let ai_look_ball_dir = normalize_vector(
+            ball.position
+                - (ai.position + ai_eye_circle.position()
+                    - Vector2::new(ai.half_size.x as f32, ai.half_size.y as f32)),
+        );
+        ai_eye_pupil.set_position(ai_eye_circle.position() + (ai_look_ball_dir * 10.0));
+
+        ai.window.draw(&mut ai_eye_pupil);
         ai.window.display();
 
         // Score window logic
 
-        if (score_window.velocity.x > 0.0) == (score_window.acceleration.x > 0.0) {
-            score_window.acceleration *= 0.5;
+        if (score_board.velocity.x > 0.0) == (score_board.acceleration.x > 0.0) {
+            score_board.acceleration *= 0.5;
         }
-        score_window.velocity += score_window.acceleration;
-        score_window.r#move();
-        if (score_window.init_position - score_window.position).length_sq() < 2.0
-            && score_window.velocity.length_sq() < 0.1
+        score_board.velocity += score_board.acceleration;
+        score_board.r#move();
+        if (score_board.init_position - score_board.position).length_sq() < 2.0
+            && score_board.velocity.length_sq() < 0.1
         {
-            score_window.velocity.x = 0.0;
-            score_window.velocity.y = 0.0;
-            score_window.position = score_window.init_position;
+            score_board.velocity.x = 0.0;
+            score_board.velocity.y = 0.0;
+            score_board.position = score_board.init_position;
         }
-        score_window.acceleration = score_window.init_position - score_window.position;
+        score_board.acceleration = score_board.init_position - score_board.position;
 
-        score_window.window.clear(score_window.color);
+        score_board.window.clear(score_board.color);
 
-        score_window.window.draw(&mut score_text);
+        score_board.window.draw(&mut score_text);
 
-        score_window.window.display();
+        score_board.window.display();
 
-        score_window.set_scale(1.0);
+        score_board.set_scale(1.0);
 
         // score_window.set_scale(1.0);
 
@@ -416,10 +462,7 @@ fn main() {
                 None,
                 Some((player.scale.y - 0.0001).clamp(0.25, IMPACT_SCALE)),
             );
-            ai.set_scale_xy(
-                None,
-                Some((player.scale.y - 0.0001).clamp(0.25, IMPACT_SCALE)),
-            );
+            ai.set_scale_xy(None, Some((ai.scale.y - 0.0001).clamp(0.25, IMPACT_SCALE)));
         }
 
         // Wait for next frame
@@ -427,19 +470,27 @@ fn main() {
             .checked_sub(Instant::now().duration_since(last_update))
         {
             std::thread::sleep(sleep_duration);
-            if delay_multiplier > 1 {
-                delay_multiplier = 1;
+        }
+        if delay_multiplier > 1 {
+            delay_multiplier = 1;
 
-                if player.color != Color::BLUE {
-                    player.color = Color::BLUE;
-                }
-
-                if ai.color != Color::RED {
-                    ai.color = Color::RED;
-                }
-
-                score_window.color = Color::WHITE;
+            if player.color != Color::BLUE {
+                player.color = Color::BLUE;
+                player.set_scale_xy(
+                    Some(player.scale.x / IMPACT_SCALE),
+                    Some(player.scale.y / IMPACT_SCALE),
+                );
             }
+
+            if ai.color != Color::RED {
+                ai.color = Color::RED;
+                ai.set_scale_xy(
+                    Some(ai.scale.x / IMPACT_SCALE),
+                    Some(ai.scale.y / IMPACT_SCALE),
+                );
+            }
+
+            score_board.color = Color::WHITE;
         }
         last_update = Instant::now();
     }
