@@ -370,20 +370,8 @@ fn main() {
         player.window.clear(player.color);
         player.window.display();
 
-        println!(
-            "Player window size: {0}x{1}",
-            player.window.size().x,
-            player.window.size().y
-        );
-
         ai.window.clear(ai.color);
         ai.window.display();
-
-        println!(
-            "AI window size: {0}x{1}",
-            ai.window.size().x,
-            ai.window.size().y
-        );
 
         // Score window logic
 
