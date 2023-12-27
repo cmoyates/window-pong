@@ -301,12 +301,12 @@ fn main() {
                             shoot_timer = MAX_SHOOT_TIMER;
                             ball.color = Color::WHITE;
 
-                            delay_multiplier = 30;
+                            delay_multiplier = 3;
                         }
                     } else {
                         println!("AI shot the ball!");
                         ball.color = Color::WHITE;
-                        delay_multiplier = 30;
+                        delay_multiplier = 3;
                     }
                     entity.color = ball.color;
 
