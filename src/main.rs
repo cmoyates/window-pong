@@ -35,6 +35,11 @@ fn main() {
 
     let mut input: i8;
 
+    let mut shoot_timer: u8 = 0;
+    const SHOOT_TIMER_MAX: u8 = 10;
+    let mut shoot_buffer: u8 = 0;
+    const SHOOT_BUFFER_MAX: u8 = 10;
+
     // Player setup
 
     let mut player: Entity = Entity::new(
@@ -88,6 +93,14 @@ fn main() {
                             println!("Starting the game!");
                             ball.velocity.x = max_ball_speed;
                             playing = true;
+                        } else {
+                            if shoot_timer > 0 {
+                                shoot_timer = 0;
+                                ball.velocity.x = max_ball_speed * ball.velocity.x.signum();
+                                ball.velocity.y = 0.0;
+                            } else {
+                                shoot_buffer = SHOOT_BUFFER_MAX;
+                            }
                         }
                     }
                     _ => {}
@@ -118,16 +131,36 @@ fn main() {
 
         // Player Logic
 
-        player.velocity.y = input as f32 * max_player_speed;
+        if input == 0 {
+            // Decelerating
+            let velocity_sign = player.velocity.y.signum();
+            player.acceleration.y = -1.0 * velocity_sign;
+            player.velocity.y += player.acceleration.y;
+            player.velocity.y =
+                player.velocity.y.abs().clamp(0.0, max_player_speed) * velocity_sign;
+            if player.velocity.y.abs() < 2.5 {
+                player.velocity.y = 0.0;
+            }
+        } else {
+            // Accelerating
+            player.acceleration.y = input as f32 * 1.0;
+            player.velocity.y += player.acceleration.y;
+        }
 
         Entity::r#move(&mut player);
 
-        let clamped_player_pos_y: f32 = player.position.y.clamp(
-            (48 + player.half_size.y) as f32,
-            (*SCREEN_HEIGHT - player.half_size.y) as f32,
-        );
+        if player.position.y < 48.0 + player.half_size.y as f32
+            || player.position.y > *SCREEN_HEIGHT as f32 - player.half_size.y as f32
+        {
+            player.velocity.y = 0.0;
 
-        player.set_position(None, Some(clamped_player_pos_y));
+            let clamped_player_pos_y: f32 = player.position.y.clamp(
+                (48 + player.half_size.y) as f32,
+                (*SCREEN_HEIGHT - player.half_size.y) as f32,
+            );
+
+            player.set_position(None, Some(clamped_player_pos_y));
+        }
 
         player.window.clear(Color::WHITE);
         player.window.display();
@@ -138,13 +171,33 @@ fn main() {
             let ball_overlap = Entity::get_overlap(&ai, &ball);
             if ball_overlap.y <= 0 {
                 if ball.position.y < ai.position.y {
-                    ai.velocity.y = -1.0 * max_player_speed;
+                    ai.acceleration.y = -1.0 * 1.0;
                 } else {
-                    ai.velocity.y = max_player_speed;
+                    ai.acceleration.y = 1.0;
                 }
+                ai.velocity.y += ai.acceleration.y;
             } else {
-                ai.velocity.y = 0.0;
+                let velocity_sign = ai.velocity.y.signum();
+                ai.acceleration.y = -1.0 * velocity_sign;
+                ai.velocity.y += ai.acceleration.y;
+                ai.velocity.y = ai.velocity.y.abs().clamp(0.0, max_player_speed) * velocity_sign;
+                if ai.velocity.y.abs() < 2.5 {
+                    ai.velocity.y = 0.0;
+                }
             }
+        }
+
+        if ai.position.y < 48.0 + ai.half_size.y as f32
+            || ai.position.y > *SCREEN_HEIGHT as f32 - ai.half_size.y as f32
+        {
+            ai.velocity.y = 0.0;
+
+            let clamped_ai_pos_y: f32 = ai.position.y.clamp(
+                (48 + ai.half_size.y) as f32,
+                (*SCREEN_HEIGHT - ai.half_size.y) as f32,
+            );
+
+            ai.set_position(None, Some(clamped_ai_pos_y));
         }
 
         ai.r#move();
@@ -205,6 +258,14 @@ fn main() {
 
                     ball.velocity += player.velocity;
                     ball.velocity = normalize_vector(ball.velocity) * max_ball_speed;
+
+                    if shoot_buffer > 0 {
+                        shoot_buffer = 0;
+                        ball.velocity.x = max_ball_speed * ball.velocity.x.signum();
+                        ball.velocity.y = 0.0;
+                    } else {
+                        shoot_timer = SHOOT_TIMER_MAX;
+                    }
                 }
             }
 
@@ -247,6 +308,15 @@ fn main() {
 
         // Update the time of the last update
         last_update = Instant::now();
+
+        if shoot_buffer > 0 {
+            shoot_buffer -= 1;
+            println!("Shoot buffer: {}", shoot_buffer);
+        }
+        if shoot_timer > 0 {
+            shoot_timer -= 1;
+            println!("Shoot timer: {}", shoot_timer);
+        }
     }
 }
 
