@@ -102,6 +102,11 @@ impl Entity {
         self.half_size = Vector2::new(self.size.x / 2, self.size.y / 2);
 
         self.window.set_size((self.size.x, self.size.y));
+
+        self.window.set_position(Vector2::new(
+            self.position.x as i32 - self.half_size.x as i32,
+            self.position.y as i32 - self.half_size.y as i32,
+        ));
     }
 
     pub fn set_scale_xy(&mut self, scale_x: Option<f32>, scale_y: Option<f32>) {
@@ -123,6 +128,11 @@ impl Entity {
         self.half_size = Vector2::new(self.size.x / 2, self.size.y / 2);
 
         self.window.set_size((self.size.x, self.size.y));
+
+        self.window.set_position(Vector2::new(
+            self.position.x as i32 - self.half_size.x as i32,
+            self.position.y as i32 - self.half_size.y as i32,
+        ));
     }
 
     pub fn get_overlap(entity_1: &Entity, entity_2: &Entity) -> Vector2<i32> {

@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
 use sfml::{
-    graphics::{Color, RenderTarget},
+    graphics::{Color, Font, RenderTarget, Text, Transformable},
     system::{Vector2, Vector2f},
     window::{Event, Key, VideoMode},
 };
@@ -38,6 +38,10 @@ fn main() {
     const MAX_SHOOT_TIMER: u8 = 10;
     let mut shoot_buffer: u8 = 0;
     const MAX_SHOOT_BUFFER: u8 = 10;
+
+    let mut score: (u8, u8) = (0, 0);
+
+    const IMPACT_SCALE: f32 = 2.0;
 
     // Player setup
 
@@ -84,6 +88,17 @@ fn main() {
         String::from("Score"),
         Color::WHITE,
     );
+
+    let font = Font::from_file("assets/Roboto-Regular.ttf").unwrap();
+    let score_string = format!("{} - {}", score.0, score.1);
+    let mut score_text = Text::new(&score_string, &font, 75);
+    score_text.set_fill_color(Color::BLACK);
+    let text_rect = score_text.local_bounds();
+    score_text.set_origin(Vector2::new(text_rect.width / 2.0, text_rect.height / 1.2));
+    score_text.set_position(Vector2::new(
+        score_window.half_size.x as f32,
+        score_window.half_size.y as f32,
+    ));
 
     // Game loop
 
@@ -286,18 +301,18 @@ fn main() {
                             shoot_timer = MAX_SHOOT_TIMER;
                             ball.color = Color::WHITE;
 
-                            delay_multiplier = 3;
+                            delay_multiplier = 30;
                         }
                     } else {
                         println!("AI shot the ball!");
                         ball.color = Color::WHITE;
-                        delay_multiplier = 3;
+                        delay_multiplier = 30;
                     }
                     entity.color = ball.color;
 
                     if entity.name == "Score" && entity.velocity.length_sq() == 0.0 {
                         entity.acceleration = ball.velocity;
-                        entity.set_scale(1.1);
+                        entity.set_scale(IMPACT_SCALE);
                     }
                 }
             }
@@ -318,6 +333,17 @@ fn main() {
                 || ball.position.x + ball.half_size.x as f32 > *SCREEN_WIDTH as f32
             {
                 println!("Point!");
+
+                if (ball.position.x - ball.half_size.x as f32) < 0.0 {
+                    score.1 += 1;
+                } else {
+                    score.0 += 1;
+                }
+                let score_string = format!("{} - {}", score.0, score.1);
+                score_text.set_string(&score_string);
+                let text_rect = score_text.local_bounds();
+                score_text.set_origin(Vector2::new(text_rect.width / 2.0, text_rect.height / 1.2));
+
                 playing = false;
                 ball.velocity.x = 0.0;
                 ball.velocity.y = 0.0;
@@ -344,8 +370,20 @@ fn main() {
         player.window.clear(player.color);
         player.window.display();
 
+        println!(
+            "Player window size: {0}x{1}",
+            player.window.size().x,
+            player.window.size().y
+        );
+
         ai.window.clear(ai.color);
         ai.window.display();
+
+        println!(
+            "AI window size: {0}x{1}",
+            ai.window.size().x,
+            ai.window.size().y
+        );
 
         // Score window logic
 
@@ -364,6 +402,9 @@ fn main() {
         score_window.acceleration = score_window.init_position - score_window.position;
 
         score_window.window.clear(score_window.color);
+
+        score_window.window.draw(&mut score_text);
+
         score_window.window.display();
 
         score_window.set_scale(1.0);
@@ -383,8 +424,14 @@ fn main() {
 
         if playing {
             max_ball_speed += 0.005;
-            player.set_scale_xy(None, Some((player.scale.y - 0.0001).clamp(0.25, 1.0)));
-            ai.set_scale_xy(None, Some((player.scale.y - 0.0001).clamp(0.25, 1.0)));
+            player.set_scale_xy(
+                None,
+                Some((player.scale.y - 0.0001).clamp(0.25, IMPACT_SCALE)),
+            );
+            ai.set_scale_xy(
+                None,
+                Some((player.scale.y - 0.0001).clamp(0.25, IMPACT_SCALE)),
+            );
         }
 
         // Wait for next frame
@@ -394,8 +441,15 @@ fn main() {
             std::thread::sleep(sleep_duration);
             if delay_multiplier > 1 {
                 delay_multiplier = 1;
-                player.color = Color::BLUE;
-                ai.color = Color::RED;
+
+                if player.color != Color::BLUE {
+                    player.color = Color::BLUE;
+                }
+
+                if ai.color != Color::RED {
+                    ai.color = Color::RED;
+                }
+
                 score_window.color = Color::WHITE;
             }
         }
@@ -403,6 +457,7 @@ fn main() {
     }
 }
 
+/// Normalizes a vector
 fn normalize_vector(vector: Vector2f) -> Vector2f {
     let length = (vector.x.powi(2) + vector.y.powi(2)).sqrt();
     if length != 0.0 {
