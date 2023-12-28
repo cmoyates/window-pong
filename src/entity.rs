@@ -1,32 +1,61 @@
+use rand::Rng;
 use sfml::{
-    graphics::{Color, RenderWindow},
+    graphics::{CircleShape, Color, RenderTarget, RenderWindow, Shape, Transformable},
     system::Vector2,
     window::{ContextSettings, Style},
 };
 
-pub struct Entity {
+use crate::utils::{interpolate_angle, normalize_vector};
+
+pub struct Entity<'a> {
+    // Window
     pub window: RenderWindow,
+
+    // Position
     pub position: Vector2<f32>,
     pub init_position: Vector2<f32>,
     prev_position: Vector2<f32>,
+
+    // Movement
     pub velocity: Vector2<f32>,
     pub acceleration: Vector2<f32>,
+
+    // Size
     pub size: Vector2<u32>,
     init_size: Vector2<u32>,
     pub half_size: Vector2<u32>,
+    // Scale
     pub scale: Vector2<f32>,
+
+    // Name
     pub name: String,
+
+    // Body
     pub color: Color,
+    // Eye
+    _eye_white: CircleShape<'a>,
+    _eye_pupil: CircleShape<'a>,
+    _look_score_timer: i32,
+    _max_look_score_timer: i32,
+    _look_score_countdown: i32,
+    _max_look_score_countdown: i32,
+    _min_look_score_countdown: i32,
+    _following_target: bool,
+    _blink_timer: i32,
+    _max_blink_timer: i32,
+    _blink_countdown: i32,
+    _max_blink_countdown: i32,
+    _min_blink_countdown: i32,
 }
 
-impl Entity {
+impl Entity<'_> {
     pub fn new(
         position: Vector2<f32>,
         width: u32,
         height: u32,
         name: String,
         color: Color,
-    ) -> Entity {
+    ) -> Entity<'static> {
         let mut window = RenderWindow::new(
             (width, height),
             "",
@@ -42,6 +71,28 @@ impl Entity {
             position.y as i32 - half_size.y as i32,
         ));
 
+        // Eye
+
+        // Eye white
+        let mut eye_white = CircleShape::new(20.0, 30);
+        eye_white.set_fill_color(Color::WHITE);
+        eye_white.set_origin(Vector2::new(20.0, 20.0));
+        eye_white.set_position(Vector2::new(half_size.x as f32, 35.0));
+
+        // Eye pupil
+        let mut eye_pupil = CircleShape::new(7.5, 30);
+        eye_pupil.set_fill_color(Color::BLACK);
+        eye_pupil.set_origin(Vector2::new(-2.5, 7.5));
+        eye_pupil.set_position(eye_white.position());
+
+        let mut rng = rand::thread_rng();
+
+        const MAX_LOOK_SCORE_COUNTDOWN: i32 = 600;
+        const MIN_LOOK_SCORE_COUNTDOWN: i32 = 300;
+
+        const MAX_BLINK_COUNTDOWN: i32 = 360;
+        const MIN_BLINK_COUNTDOWN: i32 = 180;
+
         Entity {
             window,
             position,
@@ -55,6 +106,20 @@ impl Entity {
             scale: Vector2::new(1.0, 1.0),
             name,
             color,
+            _eye_white: eye_white,
+            _eye_pupil: eye_pupil,
+            _look_score_timer: 0,
+            _max_look_score_timer: 25,
+            _look_score_countdown: rng
+                .gen_range(MIN_LOOK_SCORE_COUNTDOWN..MAX_LOOK_SCORE_COUNTDOWN),
+            _max_look_score_countdown: MAX_LOOK_SCORE_COUNTDOWN,
+            _min_look_score_countdown: MIN_LOOK_SCORE_COUNTDOWN,
+            _following_target: false,
+            _blink_timer: 0,
+            _max_blink_timer: 5,
+            _blink_countdown: rng.gen_range(MIN_BLINK_COUNTDOWN..MAX_BLINK_COUNTDOWN),
+            _max_blink_countdown: MAX_BLINK_COUNTDOWN,
+            _min_blink_countdown: MIN_BLINK_COUNTDOWN,
         }
     }
 
@@ -161,5 +226,91 @@ impl Entity {
         );
 
         return overlap;
+    }
+
+    pub fn draw(&mut self, score_board: &Entity, ball: &Entity) {
+        self.window.clear(self.color);
+
+        if self.color != Color::WHITE && self._blink_timer <= 0 {
+            self.window.draw(&mut self._eye_white);
+
+            let player_look_target = if self._look_score_timer > 0 {
+                score_board.position
+            } else {
+                ball.position
+            };
+
+            let player_look_dir = normalize_vector(
+                player_look_target
+                    - (self.position + self._eye_white.position()
+                        - Vector2::new(self.half_size.x as f32, self.half_size.y as f32)),
+            );
+
+            let player_look_angle: f32 = player_look_dir.y.atan2(player_look_dir.x).to_degrees();
+
+            if self._following_target {
+                // Have the eye track the target
+                self._eye_pupil.set_rotation(player_look_angle);
+            } else {
+                // Have the eye rotate to the targets position
+                self._eye_pupil.set_rotation(interpolate_angle(
+                    self._eye_pupil.rotation(),
+                    player_look_angle,
+                    0.2,
+                ));
+                if (self._eye_pupil.rotation() - player_look_angle).abs() < 10.0 {
+                    self._following_target = true;
+                }
+            }
+
+            if self.color == Color::YELLOW {
+                self._eye_pupil.set_fill_color(Color::GREEN);
+            }
+
+            self.window.draw(&mut self._eye_pupil);
+            self._eye_pupil.set_fill_color(Color::BLACK);
+        }
+
+        self.window.display();
+    }
+
+    pub fn update_eye_timers(&mut self) {
+        let mut rng = rand::thread_rng();
+
+        //  Player look score
+
+        if self._look_score_countdown > 0 {
+            self._look_score_countdown -= 1;
+        } else if self._look_score_countdown == 0 {
+            self._look_score_timer = self._max_look_score_timer;
+            self._look_score_countdown = -1;
+            self._following_target = false;
+        }
+
+        if self._look_score_timer > 0 {
+            self._look_score_timer -= 1;
+        } else if self._look_score_timer == 0 {
+            self._look_score_countdown =
+                rng.gen_range(self._min_look_score_countdown..self._max_look_score_countdown);
+            self._look_score_timer = -1;
+            self._following_target = false;
+        }
+
+        // Player blink
+
+        if self._blink_countdown > 0 {
+            self._blink_countdown -= 1;
+        } else if self._blink_countdown == 0 {
+            self._blink_timer = self._max_blink_timer;
+            self._blink_countdown = -1;
+        }
+
+        if self._blink_timer > 0 {
+            self._blink_timer -= 1;
+        } else if self._blink_timer == 0 {
+            self._blink_countdown =
+                rng.gen_range(self._min_blink_countdown..self._max_blink_countdown);
+            self._blink_timer = -1;
+        }
     }
 }
