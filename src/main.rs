@@ -4,10 +4,14 @@ use std::time::{Duration, Instant};
 
 use once_cell::sync::Lazy;
 use sfml::{
-    graphics::{CircleShape, Color, Font, RenderTarget, Shape, Text, Transformable},
+    graphics::{
+        CircleShape, Color, Font, RectangleShape, RenderTarget, Shape, Text, Transformable,
+    },
     system::{Vector2, Vector2f},
     window::{Event, Key, VideoMode},
 };
+
+use rand::Rng;
 
 use entity::Entity;
 
@@ -43,6 +47,24 @@ fn main() {
 
     const IMPACT_SCALE: f32 = 1.1;
 
+    let mut rng = rand::thread_rng();
+
+    let mut player_look_score_timer: i32 = 0;
+    const MAX_PLAYER_LOOK_SCORE_TIMER: i32 = 25;
+    const MAX_PLAYER_LOOK_SCORE_COUNTDOWN: i32 = 810;
+    const MIN_PLAYER_LOOK_SCORE_COUNTDOWN: i32 = 360;
+    let mut player_look_score_countdown: i32 =
+        rng.gen_range(MIN_PLAYER_LOOK_SCORE_COUNTDOWN..MAX_PLAYER_LOOK_SCORE_COUNTDOWN);
+
+    let mut player_following_target = false;
+
+    let mut player_blink_timer: i32 = 0;
+    const MAX_PLAYER_BLINK_TIMER: i32 = 5;
+    const MAX_PLAYER_BLINK_COUNTDOWN: i32 = 360;
+    const MIN_PLAYER_BLINK_COUNTDOWN: i32 = 180;
+    let mut player_blink_countdown: i32 =
+        rng.gen_range(MIN_PLAYER_BLINK_COUNTDOWN..MAX_PLAYER_BLINK_COUNTDOWN);
+
     // Player setup
 
     let mut player: Entity = Entity::new(
@@ -63,7 +85,13 @@ fn main() {
 
     let mut player_eye_pupil = CircleShape::new(7.5, 30);
     player_eye_pupil.set_fill_color(Color::BLACK);
-    player_eye_pupil.set_origin(Vector2::new(7.5, 7.5));
+    player_eye_pupil.set_origin(Vector2::new(-2.5, 7.5));
+    player_eye_pupil.set_position(player_eye_circle.position());
+
+    let mut player_eye_closed = RectangleShape::with_size(Vector2::new(40.0, 10.0));
+    player_eye_closed.set_fill_color(Color::BLACK);
+    player_eye_closed.set_origin(Vector2::new(20.0, 5.0));
+    player_eye_closed.set_position(player_eye_circle.position());
 
     // AI setup
 
@@ -326,7 +354,6 @@ fn main() {
                             delay_multiplier = 3;
                         }
                     } else {
-                        println!("AI shot the ball!");
                         ball.color = Color::WHITE;
                         delay_multiplier = 3;
                     }
@@ -391,30 +418,65 @@ fn main() {
         ball.window.clear(ball.color);
         ball.window.display();
 
-        // Display player and AI
+        // Display player
 
         player.window.clear(player.color);
-        player.window.draw(&mut player_eye_circle);
 
-        let player_look_ball_dir = normalize_vector(
-            ball.position
-                - (player.position + player_eye_circle.position()
-                    - Vector2::new(player.half_size.x as f32, player.half_size.y as f32)),
-        );
-        player_eye_pupil.set_position(player_eye_circle.position() + (player_look_ball_dir * 10.0));
+        if player.color != Color::WHITE && player_blink_timer <= 0 {
+            player.window.draw(&mut player_eye_circle);
 
-        player.window.draw(&mut player_eye_pupil);
+            let player_look_target = if player_look_score_timer > 0 {
+                score_board.position
+            } else {
+                ball.position
+            };
+
+            let player_look_dir = normalize_vector(
+                player_look_target
+                    - (player.position + player_eye_circle.position()
+                        - Vector2::new(player.half_size.x as f32, player.half_size.y as f32)),
+            );
+
+            let player_look_angle = player_look_dir.y.atan2(player_look_dir.x).to_degrees();
+
+            if player_following_target {
+                player_eye_pupil.set_rotation(player_look_angle);
+            } else {
+                player_eye_pupil.set_rotation(interpolate_angle(
+                    player_eye_pupil.rotation(),
+                    player_look_angle,
+                    0.2,
+                ));
+                if (player_eye_pupil.rotation() - player_look_angle).abs() < 10.0 {
+                    player_following_target = true;
+                }
+            }
+
+            // Rotate the pupil towards the target
+
+            if player.color == Color::YELLOW {
+                player_eye_pupil.set_fill_color(Color::GREEN);
+            }
+
+            // player_eye_pupil.set_position(player_eye_circle.position() + (player_look_dir * 10.0));
+
+            player.window.draw(&mut player_eye_pupil);
+            player_eye_pupil.set_fill_color(Color::BLACK);
+        }
+
         player.window.display();
+
+        // Display AI
 
         ai.window.clear(ai.color);
         ai.window.draw(&mut ai_eye_circle);
 
-        let ai_look_ball_dir = normalize_vector(
+        let ai_look_dir = normalize_vector(
             ball.position
                 - (ai.position + ai_eye_circle.position()
                     - Vector2::new(ai.half_size.x as f32, ai.half_size.y as f32)),
         );
-        ai_eye_pupil.set_position(ai_eye_circle.position() + (ai_look_ball_dir * 10.0));
+        ai_eye_pupil.set_position(ai_eye_circle.position() + (ai_look_dir * 10.0));
 
         ai.window.draw(&mut ai_eye_pupil);
         ai.window.display();
@@ -443,8 +505,6 @@ fn main() {
 
         score_board.set_scale(1.0);
 
-        // score_window.set_scale(1.0);
-
         // Focus on player window
         player.window.request_focus();
 
@@ -454,6 +514,42 @@ fn main() {
         }
         if shoot_timer > 0 {
             shoot_timer -= 1;
+        }
+
+        //  Player look score
+
+        if player_look_score_countdown > 0 {
+            player_look_score_countdown -= 1;
+        } else if player_look_score_countdown == 0 {
+            player_look_score_timer = MAX_PLAYER_LOOK_SCORE_TIMER;
+            player_look_score_countdown = -1;
+            player_following_target = false;
+        }
+
+        if player_look_score_timer > 0 {
+            player_look_score_timer -= 1;
+        } else if player_look_score_timer == 0 {
+            player_look_score_countdown =
+                rng.gen_range(MIN_PLAYER_LOOK_SCORE_COUNTDOWN..MAX_PLAYER_LOOK_SCORE_COUNTDOWN);
+            player_look_score_timer = -1;
+            player_following_target = false;
+        }
+
+        // Player blink
+
+        if player_blink_countdown > 0 {
+            player_blink_countdown -= 1;
+        } else if player_blink_countdown == 0 {
+            player_blink_timer = MAX_PLAYER_BLINK_TIMER;
+            player_blink_countdown = -1;
+        }
+
+        if player_blink_timer > 0 {
+            player_blink_timer -= 1;
+        } else if player_blink_timer == 0 {
+            player_blink_countdown =
+                rng.gen_range(MIN_PLAYER_BLINK_COUNTDOWN..MAX_PLAYER_BLINK_COUNTDOWN);
+            player_blink_timer = -1;
         }
 
         if playing {
@@ -504,4 +600,25 @@ fn normalize_vector(vector: Vector2f) -> Vector2f {
     } else {
         vector
     }
+}
+
+fn normalize_angle(mut angle: f32) -> f32 {
+    while angle < 0.0 {
+        angle += 360.0;
+    }
+    while angle >= 360.0 {
+        angle -= 360.0;
+    }
+    angle
+}
+
+fn interpolate_angle(current_angle: f32, target_angle: f32, delta: f32) -> f32 {
+    let mut diff = normalize_angle(target_angle - current_angle);
+
+    if diff > 180.0 {
+        diff -= 360.0;
+    }
+
+    let new_angle = current_angle + diff * delta;
+    normalize_angle(new_angle)
 }
