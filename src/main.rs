@@ -45,6 +45,7 @@ fn main() {
     let mut score: (u8, u8) = (0, 0);
 
     const IMPACT_SCALE: f32 = 1.1;
+    const SCORE_IMPACT_FORCE: f32 = 30.0;
 
     // Ball setup
 
@@ -54,6 +55,8 @@ fn main() {
         BALL_SIDE,
         String::from("Ball"),
         Color::WHITE,
+        1.0,
+        1.0,
     );
 
     // Score window setup
@@ -64,6 +67,8 @@ fn main() {
         100,
         String::from("Score"),
         Color::WHITE,
+        0.5,
+        0.85,
     );
 
     // Player setup
@@ -77,6 +82,8 @@ fn main() {
         PLAYER_WINDOW_HEIGHT,
         String::from("Player"),
         Color::BLUE,
+        0.75,
+        0.75,
     );
 
     // AI setup
@@ -90,6 +97,8 @@ fn main() {
         PLAYER_WINDOW_HEIGHT,
         String::from("AI"),
         Color::RED,
+        0.75,
+        0.75,
     );
 
     let font = Font::from_file("assets/Roboto-Regular.ttf").unwrap();
@@ -296,13 +305,15 @@ fn main() {
                     ball.velocity += entity.velocity;
                     ball.velocity = normalize_vector(ball.velocity) * max_ball_speed;
 
+                    let mut impact_force = Vector2::new(ball.velocity.x, ball.velocity.y);
+
                     if entity.name == "Player" {
                         if shoot_buffer > 0 {
                             shoot_buffer = 0;
                             ball.velocity.x = max_ball_speed * ball.velocity.x.signum();
                             ball.velocity.y = 0.0;
                             ball.color = Color::YELLOW;
-
+                            impact_force *= 2.0;
                             delay_multiplier = 5;
                         } else {
                             shoot_timer = MAX_SHOOT_TIMER;
@@ -321,9 +332,7 @@ fn main() {
                         Some(entity.scale.y * IMPACT_SCALE),
                     );
 
-                    if entity.name == "Score" && entity.velocity.length_sq() == 0.0 {
-                        entity.acceleration = ball.velocity;
-                    }
+                    entity.impact(&impact_force);
                 }
             }
 
@@ -354,19 +363,30 @@ fn main() {
                 let text_rect = score_text.local_bounds();
                 score_text.set_origin(Vector2::new(text_rect.width / 2.0, text_rect.height / 1.2));
 
+                player.set_scale(1.0);
+                player.set_position(None, Some((*SCREEN_HEIGHT / 2) as f32 - 24.0));
+
+                let ball_player_delta = ball.position - player.position;
+                player.impact(
+                    &((Vector2::new(1.0, 1.0) - (ball_player_delta / *SCREEN_WIDTH as f32))
+                        * SCORE_IMPACT_FORCE),
+                );
+
+                ai.velocity.y = 0.0;
+                ai.set_position(None, Some((*SCREEN_HEIGHT / 2) as f32 - 24.0));
+                ai.set_scale(1.0);
+                let ball_ai_delta = ball.position - ai.position;
+                ai.impact(
+                    &((Vector2::new(1.0, 1.0) - (ball_ai_delta / *SCREEN_WIDTH as f32))
+                        * SCORE_IMPACT_FORCE),
+                );
+
                 playing = false;
                 ball.velocity.x = 0.0;
                 ball.velocity.y = 0.0;
                 ball.set_position(Some(ball_center_pos.x), Some(ball_center_pos.y));
                 max_ball_speed = INIT_BALL_SPEED;
                 ball.color = Color::WHITE;
-
-                player.set_scale(1.0);
-                player.set_position(None, Some((*SCREEN_HEIGHT / 2) as f32 - 24.0));
-
-                ai.velocity.y = 0.0;
-                ai.set_position(None, Some((*SCREEN_HEIGHT / 2) as f32 - 24.0));
-                ai.set_scale(1.0);
 
                 delay_multiplier = 30;
             }
@@ -376,28 +396,30 @@ fn main() {
         ball.window.display();
 
         // Display player
-
+        player.update_impact();
         player.draw(&score_board, &ball);
 
         // Display AI
-
+        ai.update_impact();
         ai.draw(&score_board, &ball);
 
         // Score window logic
 
-        if (score_board.velocity.x > 0.0) == (score_board.acceleration.x > 0.0) {
-            score_board.acceleration *= 0.5;
-        }
-        score_board.velocity += score_board.acceleration;
-        score_board.r#move();
-        if (score_board.init_position - score_board.position).length_sq() < 2.0
-            && score_board.velocity.length_sq() < 0.1
-        {
-            score_board.velocity.x = 0.0;
-            score_board.velocity.y = 0.0;
-            score_board.position = score_board.init_position;
-        }
-        score_board.acceleration = score_board.init_position - score_board.position;
+        // if (score_board.velocity.x > 0.0) == (score_board.acceleration.x > 0.0) {
+        //     score_board.acceleration *= 0.5;
+        // }
+        // score_board.velocity += score_board.acceleration;
+        // score_board.r#move();
+        // if (score_board.init_position - score_board.position).length_sq() < 2.0
+        //     && score_board.velocity.length_sq() < 0.1
+        // {
+        //     score_board.velocity.x = 0.0;
+        //     score_board.velocity.y = 0.0;
+        //     score_board.position = score_board.init_position;
+        // }
+        // score_board.acceleration = score_board.init_position - score_board.position;
+
+        score_board.update_impact();
 
         score_board.window.clear(score_board.color);
 

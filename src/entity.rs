@@ -46,6 +46,13 @@ pub struct Entity<'a> {
     _blink_countdown: i32,
     _max_blink_countdown: i32,
     _min_blink_countdown: i32,
+
+    // Impact
+    _offset: Vector2<f32>,
+    _offset_velocity: Vector2<f32>,
+    _offset_acceleration: Vector2<f32>,
+    _spring_stiffness: f32,
+    _spring_damping: f32,
 }
 
 impl Entity<'_> {
@@ -55,6 +62,8 @@ impl Entity<'_> {
         height: u32,
         name: String,
         color: Color,
+        spring_stiffness: f32,
+        spring_damping: f32,
     ) -> Entity<'static> {
         let mut window = RenderWindow::new(
             (width, height),
@@ -106,6 +115,7 @@ impl Entity<'_> {
             scale: Vector2::new(1.0, 1.0),
             name,
             color,
+            // Eye
             _eye_white: eye_white,
             _eye_pupil: eye_pupil,
             _look_score_timer: 0,
@@ -120,6 +130,12 @@ impl Entity<'_> {
             _blink_countdown: rng.gen_range(MIN_BLINK_COUNTDOWN..MAX_BLINK_COUNTDOWN),
             _max_blink_countdown: MAX_BLINK_COUNTDOWN,
             _min_blink_countdown: MIN_BLINK_COUNTDOWN,
+            // Impact
+            _offset: Vector2::new(0.0, 0.0),
+            _offset_velocity: Vector2::new(0.0, 0.0),
+            _offset_acceleration: Vector2::new(0.0, 0.0),
+            _spring_stiffness: spring_stiffness,
+            _spring_damping: spring_damping,
         }
     }
 
@@ -129,8 +145,17 @@ impl Entity<'_> {
         self.position += self.velocity;
 
         self.window.set_position(Vector2::new(
-            self.position.x as i32 - self.half_size.x as i32,
-            self.position.y as i32 - self.half_size.y as i32,
+            self.position.x as i32 - self.half_size.x as i32 + self._offset.x as i32,
+            self.position.y as i32 - self.half_size.y as i32 + self._offset.y as i32,
+        ));
+    }
+
+    pub fn move_offset(&mut self) {
+        self._offset += self._offset_velocity;
+
+        self.window.set_position(Vector2::new(
+            self.position.x as i32 - self.half_size.x as i32 + self._offset.x as i32,
+            self.position.y as i32 - self.half_size.y as i32 + self._offset.y as i32,
         ));
     }
 
@@ -146,8 +171,8 @@ impl Entity<'_> {
         }
 
         self.window.set_position(Vector2::new(
-            self.position.x as i32 - self.half_size.x as i32,
-            self.position.y as i32 - self.half_size.y as i32,
+            self.position.x as i32 - self.half_size.x as i32 + self._offset.x as i32,
+            self.position.y as i32 - self.half_size.y as i32 + self._offset.y as i32,
         ));
     }
 
@@ -169,8 +194,8 @@ impl Entity<'_> {
         self.window.set_size((self.size.x, self.size.y));
 
         self.window.set_position(Vector2::new(
-            self.position.x as i32 - self.half_size.x as i32,
-            self.position.y as i32 - self.half_size.y as i32,
+            self.position.x as i32 - self.half_size.x as i32 + self._offset.x as i32,
+            self.position.y as i32 - self.half_size.y as i32 + self._offset.y as i32,
         ));
     }
 
@@ -195,8 +220,8 @@ impl Entity<'_> {
         self.window.set_size((self.size.x, self.size.y));
 
         self.window.set_position(Vector2::new(
-            self.position.x as i32 - self.half_size.x as i32,
-            self.position.y as i32 - self.half_size.y as i32,
+            self.position.x as i32 - self.half_size.x as i32 + self._offset.x as i32,
+            self.position.y as i32 - self.half_size.y as i32 + self._offset.y as i32,
         ));
     }
 
@@ -312,5 +337,29 @@ impl Entity<'_> {
                 rng.gen_range(self._min_blink_countdown..self._max_blink_countdown);
             self._blink_timer = -1;
         }
+    }
+
+    pub fn impact(&mut self, impact_velocity: &Vector2<f32>) {
+        self._offset_velocity = *impact_velocity;
+    }
+
+    pub fn update_impact(&mut self) {
+        // If it's not moving, do nothing
+        if self._offset_velocity.x == 0.0 && self._offset_velocity.y == 0.0 {
+            return;
+        }
+
+        let displacement = Vector2::new(0.0, 0.0) - self._offset;
+        let spring_force = displacement * self._spring_stiffness;
+        self._offset_velocity = (self._offset_velocity + spring_force) * self._spring_damping;
+
+        if self._offset_velocity.x.abs() < 0.1 && self._offset_velocity.y.abs() < 0.1 {
+            self._offset_velocity.x = 0.0;
+            self._offset_velocity.y = 0.0;
+            self._offset.x = 0.0;
+            self._offset.y = 0.0;
+        }
+
+        self.move_offset();
     }
 }
