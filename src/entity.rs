@@ -53,6 +53,7 @@ pub struct Entity<'a> {
     _offset_acceleration: Vector2<f32>,
     _spring_stiffness: f32,
     _spring_damping: f32,
+    _display_scale: f32,
 }
 
 impl Entity<'_> {
@@ -136,6 +137,7 @@ impl Entity<'_> {
             _offset_acceleration: Vector2::new(0.0, 0.0),
             _spring_stiffness: spring_stiffness,
             _spring_damping: spring_damping,
+            _display_scale: 1.0,
         }
     }
 
@@ -191,11 +193,26 @@ impl Entity<'_> {
 
         self.half_size = Vector2::new(self.size.x / 2, self.size.y / 2);
 
-        self.window.set_size((self.size.x, self.size.y));
+        self.window.set_size(self.size * self._display_scale as u32);
 
         self.window.set_position(Vector2::new(
-            self.position.x as i32 - self.half_size.x as i32 + self._offset.x as i32,
-            self.position.y as i32 - self.half_size.y as i32 + self._offset.y as i32,
+            self.position.x as i32 - (self.half_size.x as i32 * self._display_scale as i32)
+                + self._offset.x as i32,
+            self.position.y as i32 - (self.half_size.y as i32 * self._display_scale as i32)
+                + self._offset.y as i32,
+        ));
+    }
+
+    pub fn set_display_scale(&mut self, scale: f32) {
+        self._display_scale = scale;
+
+        self.window.set_size(self.size * self._display_scale as u32);
+
+        self.window.set_position(Vector2::new(
+            self.position.x as i32 - (self.half_size.x as i32 * self._display_scale as i32)
+                + self._offset.x as i32,
+            self.position.y as i32 - (self.half_size.y as i32 * self._display_scale as i32)
+                + self._offset.y as i32,
         ));
     }
 
@@ -217,11 +234,13 @@ impl Entity<'_> {
 
         self.half_size = Vector2::new(self.size.x / 2, self.size.y / 2);
 
-        self.window.set_size((self.size.x, self.size.y));
+        self.window.set_size(self.size * self._display_scale as u32);
 
         self.window.set_position(Vector2::new(
-            self.position.x as i32 - self.half_size.x as i32 + self._offset.x as i32,
-            self.position.y as i32 - self.half_size.y as i32 + self._offset.y as i32,
+            self.position.x as i32 - (self.half_size.x as i32 * self._display_scale as i32)
+                + self._offset.x as i32,
+            self.position.y as i32 - (self.half_size.y as i32 * self._display_scale as i32)
+                + self._offset.y as i32,
         ));
     }
 
@@ -297,6 +316,8 @@ impl Entity<'_> {
         }
 
         self.window.display();
+
+        self.set_display_scale(1.0);
     }
 
     pub fn update_eye_timers(&mut self) {
@@ -341,6 +362,7 @@ impl Entity<'_> {
 
     pub fn impact(&mut self, impact_velocity: &Vector2<f32>) {
         self._offset_velocity = *impact_velocity;
+        self.set_display_scale(2.0);
     }
 
     pub fn update_impact(&mut self) {

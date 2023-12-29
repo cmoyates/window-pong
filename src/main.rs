@@ -146,10 +146,7 @@ fn main() {
                                 ball.color = Color::YELLOW;
                                 delay_multiplier = 5;
                                 player.color = Color::YELLOW;
-                                player.set_scale_xy(
-                                    Some(player.scale.x * IMPACT_SCALE),
-                                    Some(player.scale.y * IMPACT_SCALE),
-                                );
+                                player.set_display_scale(IMPACT_SCALE)
                             } else {
                                 shoot_buffer = MAX_SHOOT_BUFFER;
                             }
@@ -327,11 +324,6 @@ fn main() {
                     }
                     entity.color = ball.color;
 
-                    entity.set_scale_xy(
-                        Some(entity.scale.x * IMPACT_SCALE),
-                        Some(entity.scale.y * IMPACT_SCALE),
-                    );
-
                     entity.impact(&impact_force);
                 }
             }
@@ -405,20 +397,6 @@ fn main() {
 
         // Score window logic
 
-        // if (score_board.velocity.x > 0.0) == (score_board.acceleration.x > 0.0) {
-        //     score_board.acceleration *= 0.5;
-        // }
-        // score_board.velocity += score_board.acceleration;
-        // score_board.r#move();
-        // if (score_board.init_position - score_board.position).length_sq() < 2.0
-        //     && score_board.velocity.length_sq() < 0.1
-        // {
-        //     score_board.velocity.x = 0.0;
-        //     score_board.velocity.y = 0.0;
-        //     score_board.position = score_board.init_position;
-        // }
-        // score_board.acceleration = score_board.init_position - score_board.position;
-
         score_board.update_impact();
 
         score_board.window.clear(score_board.color);
@@ -427,7 +405,7 @@ fn main() {
 
         score_board.window.display();
 
-        score_board.set_scale(1.0);
+        score_board.set_display_scale(1.0);
 
         // Focus on player window
         player.window.request_focus();
@@ -463,18 +441,10 @@ fn main() {
 
             if player.color != Color::BLUE {
                 player.color = Color::BLUE;
-                player.set_scale_xy(
-                    Some(player.scale.x / IMPACT_SCALE),
-                    Some(player.scale.y / IMPACT_SCALE),
-                );
             }
 
             if ai.color != Color::RED {
                 ai.color = Color::RED;
-                ai.set_scale_xy(
-                    Some(ai.scale.x / IMPACT_SCALE),
-                    Some(ai.scale.y / IMPACT_SCALE),
-                );
             }
 
             score_board.color = Color::WHITE;
