@@ -17,6 +17,8 @@ use utils::normalize_vector;
 static SCREEN_WIDTH: Lazy<u32> = Lazy::new(|| VideoMode::desktop_mode().width);
 static SCREEN_HEIGHT: Lazy<u32> = Lazy::new(|| VideoMode::desktop_mode().height);
 
+const FONT_DATA: &'static [u8] = include_bytes!("../assets/Roboto-Regular.ttf");
+
 fn main() {
     let mut playing: bool = false;
 
@@ -101,7 +103,7 @@ fn main() {
         0.75,
     );
 
-    let font = Font::from_file("assets/Roboto-Regular.ttf").unwrap();
+    let font = unsafe { Font::from_memory(FONT_DATA).unwrap() };
     let score_string = format!("{} - {}", score.0, score.1);
     let mut score_text = Text::new(&score_string, &font, 75);
     score_text.set_fill_color(Color::BLACK);
